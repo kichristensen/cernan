@@ -12,8 +12,10 @@ use std::mem::replace;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync;
 use time;
+use slog;
 
 pub struct Native {
+    log: slog::Logger, 
     port: u16,
     host: String,
     buffer: Vec<metric::Event>,
@@ -40,8 +42,9 @@ impl Default for NativeConfig {
 }
 
 impl Native {
-    pub fn new(config: NativeConfig) -> Native {
+    pub fn new(config: NativeConfig, log: slog::Logger) -> Native {
         Native {
+            log: log, 
             port: config.port,
             host: config.host,
             buffer: Vec::new(),
@@ -50,16 +53,17 @@ impl Native {
     }
 }
 
-impl Default for Native {
-    fn default() -> Self {
-        Native {
-            port: 1972,
-            host: String::from("127.0.0.1"),
-            buffer: Vec::new(),
-            flush_interval: 60,
-        }
-    }
-}
+// impl Default for Native {
+//     fn default() -> Self {
+//         Native {
+//             log: Default::default(),
+//             port: 1972,
+//             host: String::from("127.0.0.1"),
+//             buffer: Vec::new(),
+//             flush_interval: 60,
+//         }
+//     }
+// }
 
 impl Sink for Native {
     fn valve_state(&self) -> Valve {
@@ -190,7 +194,7 @@ impl Sink for Native {
                             }
                         }
                         Err(e) => {
-                            info!("Unable to connect to proxy at {} using addr {}
+                            info!(self.log, "Unable to connect to proxy at {} using addr {}
         with \
                                    error {}",
                                   self.host,
@@ -201,7 +205,7 @@ impl Sink for Native {
                 }
             }
             Err(e) => {
-                info!("Unable to perform DNS lookup on host {} with error {}",
+                info!(self.log, "Unable to perform DNS lookup on host {} with error {}",
                       self.host,
                       e);
             }

@@ -5,11 +5,13 @@ use chrono::offset::Utc;
 use metric::{AggregationMethod, LogLine, Telemetry};
 use sink::{Sink, Valve};
 use std::sync;
+use slog;
 
 /// The 'console' sink exists for development convenience. The sink will
 /// aggregate according to [buckets](../buckets/struct.Buckets.html) method and
 /// print each `flush-interval` to stdout.
 pub struct Console {
+    log: slog::Logger,
     aggrs: Buckets,
     buffer: Vec<LogLine>,
     flush_interval: u64,
@@ -27,8 +29,9 @@ impl Console {
     /// bin_width: 2, flush_interval: 60 };
     /// let c = Console::new(config);
     /// ```
-    pub fn new(config: ConsoleConfig) -> Console {
+    pub fn new(config: ConsoleConfig, log: slog::Logger) -> Console {
         Console {
+            log: log, 
             aggrs: Buckets::new(config.bin_width),
             buffer: Vec::new(),
             flush_interval: config.flush_interval,

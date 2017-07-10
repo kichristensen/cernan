@@ -11,6 +11,7 @@ use source::report_telemetry;
 use std::sync;
 use time;
 use uuid::Uuid;
+use slog;
 
 #[derive(Debug, Clone)]
 pub struct ElasticsearchConfig {
@@ -36,6 +37,7 @@ impl Default for ElasticsearchConfig {
 }
 
 pub struct Elasticsearch {
+    log: slog::Logger,
     buffer: Vec<LogLine>,
     client: Client,
     index_prefix: Option<String>,
@@ -43,13 +45,14 @@ pub struct Elasticsearch {
 }
 
 impl Elasticsearch {
-    pub fn new(config: ElasticsearchConfig) -> Elasticsearch {
+    pub fn new(config: ElasticsearchConfig, log: slog::Logger) -> Elasticsearch {
         let proto = if config.secure { "https" } else { "http" };
         let params =
             RequestParams::new(format!("{}://{}:{}", proto, config.host, config.port));
         let client = Client::new(params).unwrap();
 
         Elasticsearch {
+            log: log,
             buffer: Vec::new(),
             client: client,
             index_prefix: config.index_prefix,
@@ -104,7 +107,7 @@ impl Sink for Elasticsearch {
         loop {
             let mut buffer = String::with_capacity(4048);
             self.bulk_body(&mut buffer);
-            debug!("BODY: {:?}", buffer);
+            debug!(self.log, "BODY: {:?}", buffer);
             let bulk_resp: Result<BulkResponse> = self.client
                 .request(BulkRequest::new(buffer))
                 .send()
@@ -121,7 +124,7 @@ impl Sink for Elasticsearch {
                     if failed_count > 0 {
                         report_telemetry("cernan.sinks.elasticsearch.records.total_failed",
                                          failed_count as f64);
-                        error!("Failed to write {} put records", failed_count);
+                        error!(self.log, "Failed to write {} put records", failed_count);
                     }
                     return;
                 }
@@ -130,7 +133,7 @@ impl Sink for Elasticsearch {
                                      attempts as f64);
                     report_telemetry("cernan.sinks.elasticsearch.error.reason.unknown",
                                      1.0);
-                    error!("Unable to write, unknown failure: {}", err);
+                    error!(self.log, "Unable to write, unknown failure: {}", err);
                     attempts += 1;
                     time::delay(attempts);
                     if attempts > 10 {

@@ -7,6 +7,7 @@ use std::cmp;
 use std::string;
 use std::sync;
 use time;
+use slog;
 use url::Url;
 
 /// The `InfluxDB` structure
@@ -15,6 +16,7 @@ use url::Url;
 /// structure holds all the information needed to communicate with it. See
 /// `InfluxDBConfig` for configurable parameters.
 pub struct InfluxDB {
+    log: slog::Logger, 
     /// The store of Telemetry to be reported
     aggrs: Vec<Telemetry>,
     /// Number of failed delivery attempts by this sink. We keep track of this
@@ -94,7 +96,7 @@ fn get_from_cache<T>(cache: &mut Vec<(T, String)>, val: T) -> &str
 
 impl InfluxDB {
     /// Create a new `InfluxDB` given an InfluxDBConfig
-    pub fn new(config: InfluxDBConfig) -> InfluxDB {
+    pub fn new(config: InfluxDBConfig, log: slog::Logger) -> InfluxDB {
         let scheme = if config.secure { "https" } else { "http" };
         let uri = Url::parse(&format!("{}://{}:{}/write?db={}",
                                      scheme,
@@ -104,6 +106,7 @@ impl InfluxDB {
                 .expect("malformed url");
 
         InfluxDB {
+            log: log,
             aggrs: Vec::with_capacity(4048),
             delivery_attempts: 0,
             flush_interval: config.flush_interval,
@@ -168,7 +171,7 @@ impl Sink for InfluxDB {
                       .header(header::Connection::keep_alive())
                       .body(&buffer)
                       .send() {
-                Err(e) => debug!("hyper error doing POST: {:?}", e),
+                Err(e) => debug!(self.log, "hyper error doing POST: {:?}", e),
                 Ok(resp) => {
                     // https://docs.influxdata.com/influxdb/v1.
                     // 2/guides/writing_data/#http-response-summary

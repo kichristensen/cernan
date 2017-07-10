@@ -8,6 +8,7 @@ use std::sync;
 use std::thread;
 use util;
 use util::send;
+use slog;
 
 pub struct Statsd {
     chans: util::Channel,
@@ -52,7 +53,7 @@ impl Statsd {
 
 fn handle_udp(mut chans: util::Channel,
               tags: sync::Arc<metric::TagMap>,
-              socket: &UdpSocket) {
+              socket: &UdpSocket, log: slog::Logger) {
     let mut buf = [0; 8192];
     let mut metrics = Vec::new();
     let basic_metric = sync::Arc::new(Some(metric::Telemetry::default()
@@ -71,11 +72,11 @@ fn handle_udp(mut chans: util::Channel,
                     report_telemetry("cernan.statsd.packet", 1.0);
                 } else {
                     report_telemetry("cernan.statsd.bad_packet", 1.0);
-                    error!("BAD PACKET: {:?}", val);
+                    error!(log, "BAD PACKET: {:?}", val);
                 }
             }
             Err(e) => {
-                error!("Payload not valid UTF-8: {:?}", e);
+                error!(log, "Payload not valid UTF-8: {:?}", e);
             }
         }
     }
@@ -94,14 +95,14 @@ impl Source for Statsd {
                         UdpSocket::bind(addr).expect("Unable to bind to TCP socket");
                     let chans = self.chans.clone();
                     let tags = self.tags.clone();
-                    info!("server started on {:?} {}", addr, self.port);
+                    info!(self.log, "server started on {:?} {}", addr, self.port);
                     joins.push(thread::spawn(move || {
                                                  handle_udp(chans, tags, &listener)
                                              }));
                 }
             }
             Err(e) => {
-                info!("Unable to perform DNS lookup on host {} with error {}",
+                info!(self.log, "Unable to perform DNS lookup on host {} with error {}",
                       self.host,
                       e);
             }

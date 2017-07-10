@@ -11,8 +11,11 @@ use std::sync::Arc;
 use std::thread;
 use util;
 use util::send;
+#[macro_use]
+use slog;
 
 pub struct Graphite {
+    log: slog::Logger, 
     chans: util::Channel,
     host: String,
     port: u16,
@@ -41,8 +44,9 @@ impl Default for GraphiteConfig {
 }
 
 impl Graphite {
-    pub fn new(chans: util::Channel, config: GraphiteConfig) -> Graphite {
+    pub fn new(chans: util::Channel, config: GraphiteConfig, log: slog::Logger) -> Graphite {
         Graphite {
+            log: log, 
             chans: chans,
             host: config.host,
             port: config.port,
@@ -53,18 +57,19 @@ impl Graphite {
 
 fn handle_tcp(chans: util::Channel,
               tags: Arc<metric::TagMap>,
-              listner: TcpListener)
+              listner: TcpListener,
+              log: slog::Logger) 
               -> thread::JoinHandle<()> {
     thread::spawn(move || for stream in listner.incoming() {
                       if let Ok(stream) = stream {
                           report_telemetry("cernan.graphite.new_peer", 1.0);
-                          debug!("new peer at {:?} | local addr for peer {:?}",
+                          debug!(log, "new peer at {:?} | local addr for peer {:?}",
                                  stream.peer_addr(),
                                  stream.local_addr());
                           let tags = tags.clone();
                           let chans = chans.clone();
                           thread::spawn(move || {
-                                            handle_stream(chans, tags, stream);
+                                            handle_stream(chans, tags, stream, log);
                                         });
                       }
                   })
@@ -73,7 +78,8 @@ fn handle_tcp(chans: util::Channel,
 
 fn handle_stream(mut chans: util::Channel,
                  tags: Arc<metric::TagMap>,
-                 stream: TcpStream) {
+                 stream: TcpStream,
+                 log: slog::Logger) {
     thread::spawn(move || {
         let mut line = String::new();
         let mut res = Vec::new();
@@ -90,7 +96,7 @@ fn handle_stream(mut chans: util::Channel,
                     line.clear();
                 } else {
                     report_telemetry("cernan.graphite.bad_packet", 1.0);
-                    error!("bad packet: {:?}", line);
+                    error!(log, "bad packet: {}", line);
                     line.clear();
                 }
             } else {
@@ -113,14 +119,18 @@ impl Source for Graphite {
                         TcpListener::bind(addr).expect("Unable to bind to TCP socket");
                     let chans = self.chans.clone();
                     let tags = self.tags.clone();
-                    info!("server started on {:?} {}", addr, self.port);
+                    info!(self.log, "server started on {:?} {}", addr, self.port);
+                    let _log = self.log.new(o!(
+                        "client_addr" => format!("{}", addr),
+                        "port" => format!("{}", self.port),
+                    ));
                     joins.push(thread::spawn(move || {
-                                                 handle_tcp(chans, tags, listener)
+                                                 handle_tcp(chans, tags, listener, _log)
                                              }));
                 }
             }
             Err(e) => {
-                info!("Unable to perform DNS lookup on host {} with error {}",
+                info!(self.log, "Unable to perform DNS lookup on host {} with error {}",
                       self.host,
                       e);
             }

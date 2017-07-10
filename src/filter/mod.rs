@@ -48,7 +48,7 @@ pub trait Filter {
                             }
                         }
                         Err(fe) => {
-                            error!("Failed to run filter with error: {:?}",
+                            error!(self.log, "Failed to run filter with error: {:?}",
                                    name_in_fe(&fe));
                             let event = event_in_fe(fe);
                             util::send(&mut chans, event);

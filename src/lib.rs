@@ -44,9 +44,6 @@ extern crate elastic_types;
 extern crate elastic;
 
 #[macro_use]
-extern crate log;
-
-#[macro_use]
 extern crate lazy_static;
 
 #[macro_use]
@@ -54,6 +51,11 @@ extern crate serde_derive;
 
 #[cfg(test)]
 extern crate quickcheck;
+
+#[macro_use]
+extern crate slog;
+extern crate slog_term;
+extern crate slog_async;
 
 pub mod sink;
 pub mod buckets;

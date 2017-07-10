@@ -16,6 +16,7 @@ use std::time::Instant;
 use time;
 use util;
 use util::send;
+use slog;
 
 type HashMapFnv<K, V> = HashMap<K, V, BuildHasherDefault<SeaHasher>>;
 
@@ -29,6 +30,7 @@ type HashMapFnv<K, V> = HashMap<K, V, BuildHasherDefault<SeaHasher>>;
 /// exist at cernan startup. `FileServer` will discover new files which match
 /// its path in at most 60 seconds.
 pub struct FileServer {
+    log: slog::Logger, 
     chans: util::Channel,
     path: PathBuf,
     max_read_lines: usize,
@@ -67,8 +69,9 @@ impl Default for FileServerConfig {
 impl FileServer {
     /// Make a FileServer
     ///
-    pub fn new(chans: util::Channel, config: FileServerConfig) -> FileServer {
+    pub fn new(chans: util::Channel, config: FileServerConfig, log: slog::Logger) -> FileServer {
         FileServer {
+            log: log,
             chans: chans,
             path: config.path.expect("must specify a 'path' for FileServer"),
             tags: config.tags,
@@ -241,7 +244,7 @@ impl Source for FileServer {
                         };
                     }
                     Err(e) => {
-                        debug!("glob error: {}", e);
+                        debug!(self.log, "glob error: {}", e);
                     }
                 }
             }
@@ -270,7 +273,7 @@ impl Source for FileServer {
                                                           None,
                                                           Some(vec![("file_path",
                                                                      path_name)]));
-                                    trace!("{} | {}", path_name, buffer);
+                                    trace!(self.log, "{} | {}", path_name, buffer);
                                     lines.push(metric::LogLine::new(path_name, &buffer).overlay_tags_from_map(&self.tags));
                                     buffer.clear();
                                     if lines_read > self.max_read_lines {
@@ -281,7 +284,7 @@ impl Source for FileServer {
                             Err(e) => {
                                 match e.kind() {
                                     io::ErrorKind::TimedOut => {}
-                                    _ => trace!("read-line error: {}", e),
+                                    _ => trace!(self.log, "read-line error: {}", e),
                                 }
                                 attempts = (attempts + 1) % 10;
                                 break;

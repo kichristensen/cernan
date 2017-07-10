@@ -9,8 +9,10 @@ use std::net::ToSocketAddrs;
 use std::string;
 use std::sync;
 use time;
+use slog;
 
 pub struct Wavefront {
+    log: slog::Logger, 
     host: String,
     port: u16,
     aggrs: Buckets,
@@ -89,11 +91,12 @@ fn get_from_cache<T>(cache: &mut Vec<(T, String)>, val: T) -> &str
 }
 
 impl Wavefront {
-    pub fn new(config: WavefrontConfig) -> Result<Wavefront, String> {
+    pub fn new(config: WavefrontConfig, log: slog::Logger) -> Result<Wavefront, String> {
         if config.host == "" {
             return Err("Host can not be empty".to_string());
         }
         Ok(Wavefront {
+            log: log, 
                host: config.host,
                port: config.port,
                aggrs: Buckets::new(config.bin_width),
@@ -211,7 +214,7 @@ impl Sink for Wavefront {
             report_telemetry("cernan.sinks.wavefront.delivery_attempts",
                              self.delivery_attempts as f64);
             if self.delivery_attempts > 0 {
-                debug!("delivery attempts: {}", self.delivery_attempts);
+                debug!(self.log, "delivery attempts: {}", self.delivery_attempts);
             }
             let addrs = (self.host.as_str(), self.port).to_socket_addrs();
             match addrs {
@@ -233,7 +236,7 @@ impl Sink for Wavefront {
                                 }
                             }
                             Err(e) => {
-                                info!("Unable to connect to proxy at {} using addr {} with error \
+                                info!(self.log, "Unable to connect to proxy at {} using addr {} with error \
                                        {}",
                                       self.host,
                                       ip,
@@ -244,7 +247,7 @@ impl Sink for Wavefront {
                     }
                 }
                 Err(e) => {
-                    info!("Unable to perform DNS lookup on host {} with error {}",
+                    info!(self.log, "Unable to perform DNS lookup on host {} with error {}",
                           self.host,
                           e);
                 }

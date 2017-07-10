@@ -1,9 +1,11 @@
 extern crate chrono;
 extern crate cernan;
 extern crate fern;
-#[macro_use]
-extern crate log;
 extern crate hopper;
+#[macro_use]
+extern crate slog;
+extern crate slog_term;
+extern crate slog_async;
 
 use cernan::filter::{Filter, ProgrammableFilterConfig};
 use cernan::metric;
@@ -18,6 +20,7 @@ use std::mem;
 use std::process;
 use std::str;
 use std::thread;
+use slog::Drain;
 
 fn populate_forwards(sends: &mut util::Channel,
                      mut top_level_forwards: Option<&mut HashSet<String>>,
@@ -50,6 +53,12 @@ macro_rules! cfg_conf {
 }
 
 fn main() {
+    let decorator = slog_term::TermDecorator::new().build();
+    let drain = slog_term::FullFormat::new(decorator).build().fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+
+    let root_log = slog::Logger::root(drain, o!("version" => env!("CARGO_PKG_VERSION")));
+
     let mut args = cernan::config::parse_args();
 
     let level = match args.verbose {
@@ -86,7 +95,7 @@ fn main() {
             hopper::channel(&config.config_path, &args.data_directory).unwrap();
         sends.insert(config.config_path.clone(), null_send);
         joins.push(thread::spawn(move || {
-                                     cernan::sink::Null::new(config).run(null_recv);
+            cernan::sink::Null::new(config).run(null_recv);
                                  }));
     }
     if let Some(config) = mem::replace(&mut args.console, None) {
@@ -95,7 +104,8 @@ fn main() {
             hopper::channel(&config_path, &args.data_directory).unwrap();
         sends.insert(config_path.clone(), console_send);
         joins.push(thread::spawn(move || {
-                                     cernan::sink::Console::new(config)
+            let console_log = root_log.new(o!("sink" => "null"));
+                                     cernan::sink::Console::new(config, console_log)
                                          .run(console_recv);
                                  }));
     }
@@ -165,7 +175,8 @@ fn main() {
                 hopper::channel(&config_path, &args.data_directory).unwrap();
             sends.insert(config_path.clone(), firehose_send);
             joins.push(thread::spawn(move || {
-                                         cernan::sink::Firehose::new(f)
+                let _log = root_log.new(o!("sink" => "firehose"));
+                                         cernan::sink::Firehose::new(f, _log)
                                              .run(firehose_recv);
                                      }));
         }
@@ -237,8 +248,9 @@ fn main() {
                           &cfg_conf!(config),
                           &sends);
         joins.push(thread::spawn(move || {
+            let _log = root_log.new(o!("source" => "graphite"));
                                      cernan::source::Graphite::new(graphite_sends,
-                                                                   config)
+                                                                   config, _log)
                                              .run();
                                  }));
     });

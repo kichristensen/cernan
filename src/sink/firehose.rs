@@ -15,6 +15,7 @@ use serde_json::value::Value;
 use sink::{Sink, Valve};
 use source::report_full_telemetry;
 use std::sync;
+use slog;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -39,6 +40,7 @@ impl Default for FirehoseConfig {
 }
 
 pub struct Firehose {
+    log: slog::Logger, 
     buffer: Vec<LogLine>,
     delivery_stream_name: String,
     region: Region,
@@ -47,8 +49,9 @@ pub struct Firehose {
 }
 
 impl Firehose {
-    pub fn new(config: FirehoseConfig) -> Firehose {
+    pub fn new(config: FirehoseConfig, log: slog::Logger) -> Firehose {
         Firehose {
+            log: log, 
             buffer: Vec::new(),
             delivery_stream_name:
                 config.delivery_stream.expect("delivery_stream cannot be None"),
@@ -104,7 +107,7 @@ impl Sink for Firehose {
             loop {
                 match client.put_record_batch(&prbi) {
                     Ok(prbo) => {
-                        debug!("Wrote {} records to delivery stream {}",
+                        debug!(self.log, "Wrote {} records to delivery stream {}",
                                prbi.records.len(),
                                prbi.delivery_stream_name);
                         report_full_telemetry("cernan.sinks.firehose.records.delivery",
@@ -127,7 +130,7 @@ impl Sink for Firehose {
                                                   Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                            error!("Failed to write {} put records", failed_put_count);
+                            error!(self.log, "Failed to write {} put records", failed_put_count);
                         }
                         break;
                     }
@@ -146,7 +149,7 @@ impl Sink for Firehose {
                                                  Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                                error!("Unable to write to resource, not found: {}",
+                                error!(self.log, "Unable to write to resource, not found: {}",
                                        rnf_err);
                                 break;
                             }
@@ -157,7 +160,7 @@ impl Sink for Firehose {
                                                  Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                                error!("Unable to write, invalid argument: {}",
+                                error!(self.log, "Unable to write, invalid argument: {}",
                                        ia_err);
                                 break;
                             }
@@ -168,7 +171,7 @@ impl Sink for Firehose {
                                                  Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                                error!("Unable to write, http dispatch: {}", hd_err);
+                                error!(self.log, "Unable to write, http dispatch: {}", hd_err);
                                 break;
                             }
                             Validation(v_err) => {
@@ -178,7 +181,7 @@ impl Sink for Firehose {
                                                  Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                                error!("Unable to write, validation failure: {}",
+                                error!(self.log, "Unable to write, validation failure: {}",
                                        v_err);
                                 break;
                             }
@@ -189,7 +192,7 @@ impl Sink for Firehose {
                                                  Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                                error!("Unable to write, unknown failure: {}", u_err);
+                                error!(self.log, "Unable to write, unknown failure: {}", u_err);
                                 break;
                             }
                             // The following errors are recoverable, potentially.
@@ -200,7 +203,7 @@ impl Sink for Firehose {
                                                  Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                                error!("Unable to write, credential failure: {}",
+                                error!(self.log, "Unable to write, credential failure: {}",
                                        c_err);
                             }
                             ServiceUnavailable(su_err) => {
@@ -210,7 +213,7 @@ impl Sink for Firehose {
                                                  Some(vec![("delivery_stream_name",
                                                         prbi.delivery_stream_name
                                                             .as_str())]));
-                                error!("Service unavailable, will retry: {}", su_err);
+                                error!(self.log, "Service unavailable, will retry: {}", su_err);
                             }
                         }
                     }

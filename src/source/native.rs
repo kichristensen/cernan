@@ -9,9 +9,11 @@ use std::io::Read;
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::str;
 use std::thread;
+use slog;
 use util;
 
 pub struct NativeServer {
+    log: slog::Logger,
     chans: util::Channel,
     ip: String,
     port: u16,
@@ -41,9 +43,10 @@ impl Default for NativeServerConfig {
 
 impl NativeServer {
     pub fn new(chans: Vec<hopper::Sender<metric::Event>>,
-               config: NativeServerConfig)
+               config: NativeServerConfig, log: slog::Logger)
                -> NativeServer {
         NativeServer {
+            log: log,
             chans: chans,
             ip: config.ip,
             port: config.port,
@@ -54,23 +57,23 @@ impl NativeServer {
 
 fn handle_tcp(chans: util::Channel,
               tags: metric::TagMap,
-              listner: TcpListener)
+              listner: TcpListener, log: slog::Logger)
               -> thread::JoinHandle<()> {
     thread::spawn(move || for stream in listner.incoming() {
                       if let Ok(stream) = stream {
-                          debug!("new peer at {:?} | local addr for peer {:?}",
+                          debug!(log, "new peer at {:?} | local addr for peer {:?}",
                                  stream.peer_addr(),
                                  stream.local_addr());
                           let tags = tags.clone();
                           let chans = chans.clone();
                           thread::spawn(move || {
-                                            handle_stream(chans, tags, stream);
+                                            handle_stream(chans, tags, stream, log);
                                         });
                       }
                   })
 }
 
-fn handle_stream(mut chans: util::Channel, tags: metric::TagMap, stream: TcpStream) {
+fn handle_stream(mut chans: util::Channel, tags: metric::TagMap, stream: TcpStream, log: slog::Logger) {
     thread::spawn(move || {
         let mut reader = io::BufReader::new(stream);
         let mut buf = Vec::with_capacity(4000);
@@ -135,7 +138,7 @@ fn handle_stream(mut chans: util::Channel, tags: metric::TagMap, stream: TcpStre
                     }
                 }
                 Err(err) => {
-                    trace!("Unable to read payload: {:?}", err);
+                    trace!(log, "Unable to read payload: {:?}", err);
                     return;
                 }
             }
@@ -153,8 +156,12 @@ impl Source for NativeServer {
         let listener = TcpListener::bind(srv.first().unwrap()).expect("Unable to bind to TCP socket");
         let chans = self.chans.clone();
         let tags = self.tags.clone();
-        info!("server started on {}:{}", self.ip, self.port);
-        let jh = thread::spawn(move || handle_tcp(chans, tags, listener));
+        info!(self.log, "server started on {}:{}", self.ip, self.port);
+        let _log = self.log.new(o!(
+            "server_ipr" => format!("{}", self.ip),
+            "port" => format!("{}", self.port),
+        ));
+        let jh = thread::spawn(move || handle_tcp(chans, tags, listener, _log));
 
         jh.join().expect("Uh oh, child thread panicked!");
     }

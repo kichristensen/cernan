@@ -7,6 +7,7 @@ use lua::ffi::lua_State;
 use metric;
 use std::path::PathBuf;
 use std::sync;
+use slog;
 
 struct Payload<'a> {
     metrics: Vec<Box<metric::Telemetry>>,
@@ -97,7 +98,8 @@ impl<'a> Payload<'a> {
                 (*pyld).metrics.push(Box::new(m));
             }
             None => {
-                error!("[push_metric] no name argument given");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[push_metric] no name argument given");
             }
         }
         0
@@ -122,7 +124,8 @@ impl<'a> Payload<'a> {
                 (*pyld).logs.push(Box::new(l));
             }
             None => {
-                error!("[push_log] no line argument given");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[push_log] no line argument given");
             }
         };
         0
@@ -169,7 +172,8 @@ impl<'a> Payload<'a> {
                 }
             }
             None => {
-                error!("[log_tag_value] no key provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[log_tag_value] no key provided");
                 state.push_nil();
             }
         }
@@ -193,7 +197,8 @@ impl<'a> Payload<'a> {
                 }
             }
             None => {
-                error!("[log_tag_value] no key provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[log_tag_value] no key provided");
                 state.push_nil();
             }
         }
@@ -217,7 +222,8 @@ impl<'a> Payload<'a> {
                 }
             }
             None => {
-                error!("[log_tag_value] no key provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[log_tag_value] no key provided");
                 state.push_nil();
             }
         }
@@ -244,13 +250,15 @@ impl<'a> Payload<'a> {
                         }
                     }
                     None => {
-                        error!("[metric_set_tag] no key provided");
+                        // TODO get slog to scope to this module
+                        // error!(self.log, "[metric_set_tag] no key provided");
                         state.push_nil();
                     }
                 }
             }
             None => {
-                error!("[metric_set_tag] no val provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[metric_set_tag] no val provided");
                 state.push_nil();
             }
         }
@@ -276,13 +284,15 @@ impl<'a> Payload<'a> {
                         }
                     }
                     None => {
-                        error!("[log_set_tag] no key provided");
+                        // TODO get slog to scope to this module
+                        // error!(self.log, "[log_set_tag] no key provided");
                         state.push_nil();
                     }
                 }
             }
             None => {
-                error!("[log_set_tag] no val provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[log_set_tag] no val provided");
                 state.push_nil();
             }
         }
@@ -308,13 +318,15 @@ impl<'a> Payload<'a> {
                         }
                     }
                     None => {
-                        error!("[log_set_field] no key provided");
+                        // TODO get slog to scope to this module
+                        // error!(self.log, "[log_set_field] no key provided");
                         state.push_nil();
                     }
                 }
             }
             None => {
-                error!("[log_set_field] no val provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[log_set_field] no val provided");
                 state.push_nil();
             }
         }
@@ -339,7 +351,8 @@ impl<'a> Payload<'a> {
                 }
             }
             None => {
-                error!("[metric_remove_tag] no val provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[metric_remove_tag] no val provided");
                 state.push_nil();
             }
         }
@@ -363,7 +376,8 @@ impl<'a> Payload<'a> {
                 }
             }
             None => {
-                error!("[log_remove_tag] no val provided");
+                // TODO get slog to scope to this module
+                // error!(self.log, "[log_remove_tag] no val provided");
                 state.push_nil();
             }
         }
@@ -436,7 +450,7 @@ impl Default for ProgrammableFilterConfig {
 }
 
 impl ProgrammableFilter {
-    pub fn new(config: ProgrammableFilterConfig) -> ProgrammableFilter {
+    pub fn new(config: ProgrammableFilterConfig, log: slog::Logger) -> ProgrammableFilter {
         let mut state = lua::State::new();
         state.open_libs();
 
@@ -459,29 +473,29 @@ impl ProgrammableFilter {
         let script = &config.script.expect("must have a specified scripts config");
         let script_path = script.to_str().unwrap();
         match state.load_file(script_path) {
-            ThreadStatus::Ok => trace!("was able to load script at {}", script_path),
+            ThreadStatus::Ok => trace!(log, "was able to load script at {}", script_path),
             ThreadStatus::SyntaxError => {
-                error!("syntax error in script at {}", script_path);
+                error!(log, "syntax error in script at {}", script_path);
                 panic!()
             }
             other => {
-                error!("unknown status: {:?}", other);
+                error!(log, "unknown status: {:?}", other);
                 panic!()
             }
         }
         match state.pcall(0, 0, 0) {
-            ThreadStatus::Ok => trace!("was able to load script at {}", script_path),
+            ThreadStatus::Ok => trace!(log, "was able to load script at {}", script_path),
             ThreadStatus::SyntaxError => {
-                error!("syntax error in script at {}", script_path);
+                error!(log, "syntax error in script at {}", script_path);
                 panic!()
             }
             ThreadStatus::RuntimeError => {
-                error!("encountered a runtime error");
+                error!(log, "encountered a runtime error");
                 println!("encountered a runtime error");
                 panic!()
             }
             other => {
-                error!("unknown status: {:?}", other);
+                error!(log, "unknown status: {:?}", other);
                 println!("unknown status: {:?}", other);
                 panic!()
             }
