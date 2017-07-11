@@ -6,16 +6,16 @@ use protobuf::repeated::RepeatedField;
 use protobuf::stream::CodedOutputStream;
 use protocols::native::{AggregationMethod, LogLine, Payload, Telemetry};
 use sink::{Sink, Valve};
+use slog;
 use std::collections::HashMap;
 use std::io::BufWriter;
 use std::mem::replace;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync;
 use time;
-use slog;
 
 pub struct Native {
-    log: slog::Logger, 
+    log: slog::Logger,
     port: u16,
     host: String,
     buffer: Vec<metric::Event>,
@@ -44,7 +44,7 @@ impl Default for NativeConfig {
 impl Native {
     pub fn new(config: NativeConfig, log: slog::Logger) -> Native {
         Native {
-            log: log, 
+            log: log,
             port: config.port,
             host: config.host,
             buffer: Vec::new(),
@@ -194,20 +194,26 @@ impl Sink for Native {
                             }
                         }
                         Err(e) => {
-                            info!(self.log, "Unable to connect to proxy at {} using addr {}
+                            info!(
+                                self.log,
+                                "Unable to connect to proxy at {} using addr {}
         with \
                                    error {}",
-                                  self.host,
-                                  ip,
-                                  e)
+                                self.host,
+                                ip,
+                                e
+                            )
                         }
                     }
                 }
             }
             Err(e) => {
-                info!(self.log, "Unable to perform DNS lookup on host {} with error {}",
-                      self.host,
-                      e);
+                info!(
+                    self.log,
+                    "Unable to perform DNS lookup on host {} with error {}",
+                    self.host,
+                    e
+                );
             }
         }
     }

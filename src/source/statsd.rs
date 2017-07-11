@@ -1,5 +1,6 @@
 use metric;
 use protocols::statsd::parse_statsd;
+use slog;
 use source::Source;
 use source::internal::report_telemetry;
 use std::net::{ToSocketAddrs, UdpSocket};
@@ -8,9 +9,9 @@ use std::sync;
 use std::thread;
 use util;
 use util::send;
-use slog;
 
 pub struct Statsd {
+    log: slog::Logger,
     chans: util::Channel,
     host: String,
     port: u16,
@@ -41,8 +42,13 @@ impl Default for StatsdConfig {
 }
 
 impl Statsd {
-    pub fn new(chans: util::Channel, config: StatsdConfig) -> Statsd {
+    pub fn new(
+        chans: util::Channel,
+        config: StatsdConfig,
+        log: slog::Logger,
+    ) -> Statsd {
         Statsd {
+            log: log,
             chans: chans,
             host: config.host,
             port: config.port,
@@ -51,13 +57,17 @@ impl Statsd {
     }
 }
 
-fn handle_udp(mut chans: util::Channel,
-              tags: sync::Arc<metric::TagMap>,
-              socket: &UdpSocket, log: slog::Logger) {
+fn handle_udp(
+    mut chans: util::Channel,
+    tags: sync::Arc<metric::TagMap>,
+    socket: &UdpSocket,
+    log: slog::Logger,
+) {
     let mut buf = [0; 8192];
     let mut metrics = Vec::new();
-    let basic_metric = sync::Arc::new(Some(metric::Telemetry::default()
-                                               .overlay_tags_from_map(&tags)));
+    let basic_metric = sync::Arc::new(Some(
+        metric::Telemetry::default().overlay_tags_from_map(&tags),
+    ));
     loop {
         let (len, _) = match socket.recv_from(&mut buf) {
             Ok(r) => r,
@@ -96,15 +106,22 @@ impl Source for Statsd {
                     let chans = self.chans.clone();
                     let tags = self.tags.clone();
                     info!(self.log, "server started on {:?} {}", addr, self.port);
-                    joins.push(thread::spawn(move || {
-                                                 handle_udp(chans, tags, &listener)
-                                             }));
+                    let _log = self.log.new(o!(
+                        "server_ip" => format!("{}", addr),
+                        "port" => format!("{}", self.port),
+                    ));
+                    joins.push(thread::spawn(
+                        move || handle_udp(chans, tags, &listener, _log),
+                    ));
                 }
             }
             Err(e) => {
-                info!(self.log, "Unable to perform DNS lookup on host {} with error {}",
-                      self.host,
-                      e);
+                info!(
+                    self.log,
+                    "Unable to perform DNS lookup on host {} with error {}",
+                    self.host,
+                    e
+                );
             }
         }
 

@@ -1,6 +1,5 @@
 extern crate chrono;
 extern crate cernan;
-extern crate fern;
 extern crate hopper;
 #[macro_use]
 extern crate slog;
@@ -14,20 +13,22 @@ use cernan::sink::FirehoseConfig;
 use cernan::sink::Sink;
 use cernan::source::Source;
 use cernan::util;
-use chrono::Utc;
+use slog::Drain;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::process;
 use std::str;
+use std::sync;
 use std::thread;
-use slog::Drain;
 
-fn populate_forwards(sends: &mut util::Channel,
-                     mut top_level_forwards: Option<&mut HashSet<String>>,
-                     forwards: &[String],
-                     config_path: &str,
-                     available_sends: &HashMap<String,
-                                               hopper::Sender<metric::Event>>) {
+fn populate_forwards(
+    sends: &mut util::Channel,
+    mut top_level_forwards: Option<&mut HashSet<String>>,
+    forwards: &[String],
+    config_path: &str,
+    log: sync::Arc<sync::Mutex<slog::Logger>>,
+    available_sends: &HashMap<String, hopper::Sender<metric::Event>>,
+) {
     for fwd in forwards {
         if let Some(tlf) = top_level_forwards.as_mut() {
             let _ = (*tlf).insert(fwd.clone());
@@ -37,9 +38,11 @@ fn populate_forwards(sends: &mut util::Channel,
                 sends.push(snd.clone());
             }
             None => {
-                error!("Unable to fulfill configured forward: {} => {}",
-                       config_path,
-                       fwd);
+                error!(log.lock().unwrap(),
+                       "Unable to fulfill configured forward";
+                       "config_path" => config_path,
+                       "forward" => fwd
+                );
                 process::exit(0);
             }
         }
@@ -57,33 +60,36 @@ fn main() {
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let drain = slog_async::Async::new(drain).build().fuse();
 
-    let root_log = slog::Logger::root(drain, o!("version" => env!("CARGO_PKG_VERSION")));
+    let root_log =
+        slog::Logger::root(drain, o!("version" => env!("CARGO_PKG_VERSION")));
+    let root_log = sync::Arc::new(sync::Mutex::new(root_log));
 
     let mut args = cernan::config::parse_args();
 
+    // TODO set log level
     let level = match args.verbose {
-        0 => log::LogLevelFilter::Error,
-        1 => log::LogLevelFilter::Warn,
-        2 => log::LogLevelFilter::Info,
-        3 => log::LogLevelFilter::Debug,
-        _ => log::LogLevelFilter::Trace,
+        0 => slog::Level::Error,
+        1 => slog::Level::Warning,
+        2 => slog::Level::Info,
+        3 => slog::Level::Debug,
+        _ => slog::Level::Trace,
     };
 
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-                    out.finish(format_args!("[{}][{}][{}][{}] {}",
-                                            record.location().module_path(),
-                                            record.location().line(),
-                                            Utc::now().to_rfc3339(),
-                                            record.level(),
-                                            message))
-                })
-        .level(level)
-        .chain(std::io::stdout())
-        .apply()
-        .expect("could not set up logging");
+    // fern::Dispatch::new()
+    //     .format(|out, message, record| {
+    //                 out.finish(format_args!("[{}][{}][{}][{}] {}",
+    //                                         record.location().module_path(),
+    //                                         record.location().line(),
+    //                                         Utc::now().to_rfc3339(),
+    //                                         record.level(),
+    //                                         message))
+    //             })
+    //     .level(level)
+    //     .chain(std::io::stdout())
+    //     .apply()
+    //     .expect("could not set up logging");
 
-    info!("cernan - {}", args.version);
+    info!(&root_log.lock().unwrap(), "cernan - {}", args.version);
     let mut joins = Vec::new();
     let mut sends: HashMap<String, hopper::Sender<metric::Event>> = HashMap::new();
     let mut flush_sends = HashSet::new();
@@ -94,9 +100,9 @@ fn main() {
         let (null_send, null_recv) =
             hopper::channel(&config.config_path, &args.data_directory).unwrap();
         sends.insert(config.config_path.clone(), null_send);
-        joins.push(thread::spawn(move || {
-            cernan::sink::Null::new(config).run(null_recv);
-                                 }));
+        joins.push(thread::spawn(
+            move || { cernan::sink::Null::new(config).run(null_recv); },
+        ));
     }
     if let Some(config) = mem::replace(&mut args.console, None) {
         let config_path = cfg_conf!(config);
@@ -104,23 +110,24 @@ fn main() {
             hopper::channel(&config_path, &args.data_directory).unwrap();
         sends.insert(config_path.clone(), console_send);
         joins.push(thread::spawn(move || {
-            let console_log = root_log.new(o!("sink" => "null"));
-                                     cernan::sink::Console::new(config, console_log)
-                                         .run(console_recv);
-                                 }));
+            cernan::sink::Console::new(config).run(console_recv);
+        }));
     }
     if let Some(config) = mem::replace(&mut args.wavefront, None) {
         let config_path = cfg_conf!(config);
-        let (wf_send, wf_recv) = hopper::channel(&config_path, &args.data_directory)
-            .unwrap();
+        let (wf_send, wf_recv) =
+            hopper::channel(&config_path, &args.data_directory).unwrap();
         sends.insert(config_path.clone(), wf_send);
+        let _log = root_log.lock().unwrap().new(o!(
+                "sink" => "wavefront",
+                ));
         joins.push(thread::spawn(move || {
-            match cernan::sink::Wavefront::new(config) {
+            match cernan::sink::Wavefront::new(config, _log.clone()) {
                 Ok(mut w) => {
                     w.run(wf_recv);
                 }
                 Err(e) => {
-                    error!("Configuration error for Wavefront: {}", e);
+                    error!(_log, "Configuration error for Wavefront: {}", e);
                     process::exit(1);
                 }
             }
@@ -132,28 +139,32 @@ fn main() {
             hopper::channel(&config_path, &args.data_directory).unwrap();
         sends.insert(config_path.clone(), prometheus_send);
         joins.push(thread::spawn(move || {
-                                     cernan::sink::Prometheus::new(config)
-                                         .run(prometheus_recv);
-                                 }));
+            cernan::sink::Prometheus::new(config).run(prometheus_recv);
+        }));
     }
     if let Some(config) = mem::replace(&mut args.influxdb, None) {
         let config_path = cfg_conf!(config);
-        let (flx_send, flx_recv) = hopper::channel(&config_path, &args.data_directory)
-            .unwrap();
+        let (flx_send, flx_recv) =
+            hopper::channel(&config_path, &args.data_directory).unwrap();
         sends.insert(config_path.clone(), flx_send);
+        let _log = root_log.lock().unwrap().new(o!(
+                "sink" => "influxdb",
+                ));
         joins.push(thread::spawn(move || {
-                                     cernan::sink::InfluxDB::new(config).run(flx_recv);
-                                 }));
+            cernan::sink::InfluxDB::new(config, _log).run(flx_recv);
+        }));
     }
     if let Some(config) = mem::replace(&mut args.native_sink_config, None) {
         let config_path = cfg_conf!(config);
         let (cernan_send, cernan_recv) =
             hopper::channel(&config_path, &args.data_directory).unwrap();
         sends.insert(config_path.clone(), cernan_send);
+        let _log = root_log.lock().unwrap().new(o!(
+                "sink" => "native",
+                ));
         joins.push(thread::spawn(move || {
-                                     cernan::sink::Native::new(config)
-                                         .run(cernan_recv);
-                                 }));
+            cernan::sink::Native::new(config, _log).run(cernan_recv);
+        }));
     }
 
     if let Some(config) = mem::replace(&mut args.elasticsearch, None) {
@@ -161,10 +172,12 @@ fn main() {
         let (cernan_send, cernan_recv) =
             hopper::channel(&config_path, &args.data_directory).unwrap();
         sends.insert(config_path.clone(), cernan_send);
+        let _log = root_log.lock().unwrap().new(o!(
+                "sink" => "elasticsearch",
+                ));
         joins.push(thread::spawn(move || {
-                                     cernan::sink::Elasticsearch::new(config)
-                                         .run(cernan_recv);
-                                 }));
+            cernan::sink::Elasticsearch::new(config, _log).run(cernan_recv);
+        }));
     }
 
     if let Some(cfgs) = mem::replace(&mut args.firehosen, None) {
@@ -174,99 +187,130 @@ fn main() {
             let (firehose_send, firehose_recv) =
                 hopper::channel(&config_path, &args.data_directory).unwrap();
             sends.insert(config_path.clone(), firehose_send);
+            let _log = root_log.lock().unwrap().new(o!("sink" => "firehose"));
             joins.push(thread::spawn(move || {
-                let _log = root_log.new(o!("sink" => "firehose"));
-                                         cernan::sink::Firehose::new(f, _log)
-                                             .run(firehose_recv);
-                                     }));
+                cernan::sink::Firehose::new(f, _log).run(firehose_recv);
+            }));
         }
     }
 
     // // FILTERS
     // //
-    mem::replace(&mut args.filters, None).map(|cfg_map| for config in cfg_map.values() {
-        let c: ProgrammableFilterConfig = (*config).clone();
-        let config_path = cfg_conf!(config);
-        let (flt_send, flt_recv) = hopper::channel(&config_path, &args.data_directory).unwrap();
-        sends.insert(config_path.clone(), flt_send);
-        let mut downstream_sends = Vec::new();
-        populate_forwards(&mut downstream_sends,
-                          None,
-                          &config.forwards,
-                          &config.config_path.clone().expect("[INTERNAL ERROR] no config_path"),
-                          &sends);
-        joins.push(thread::spawn(move || { cernan::filter::ProgrammableFilter::new(c).run(flt_recv, downstream_sends); }));
-    });
+    if let Some(cfg_map) = mem::replace(&mut args.filters, None) {
+        for config in cfg_map.values() {
+            let c: ProgrammableFilterConfig = (*config).clone();
+            let config_path = cfg_conf!(config);
+            let (flt_send, flt_recv) =
+                hopper::channel(&config_path, &args.data_directory).unwrap();
+            sends.insert(config_path.clone(), flt_send);
+            let mut downstream_sends = Vec::new();
+            populate_forwards(
+                &mut downstream_sends,
+                None,
+                &config.forwards,
+                &config.config_path.clone().expect("[INTERNAL ERROR] no config_path"),
+                root_log.clone(),
+                &sends,
+            );
+            let _log = root_log
+                .lock()
+                .unwrap()
+                .new(o!("filter" => config.config_path.clone()));
+            joins.push(thread::spawn(move || {
+                cernan::filter::ProgrammableFilter::new(c, _log)
+                    .run(flt_recv, downstream_sends);
+            }));
+        }
+    }
 
     // SOURCES
     //
-    mem::replace(&mut args.native_server_config, None)
-        .map(|cfg_map| for (_, config) in cfg_map {
-                 let mut native_server_send = Vec::new();
-                 populate_forwards(&mut native_server_send,
-                                   Some(&mut flush_sends),
-                                   &config.forwards,
-                                   &cfg_conf!(config),
-                                   &sends);
-                 joins.push(thread::spawn(move || {
-                cernan::source::NativeServer::new(native_server_send, config).run();
+    if let Some(cfg_map) = mem::replace(&mut args.native_server_config, None) {
+        for (_, config) in cfg_map {
+            let mut native_server_send = Vec::new();
+            populate_forwards(
+                &mut native_server_send,
+                Some(&mut flush_sends),
+                &config.forwards,
+                &cfg_conf!(config),
+                root_log.clone(),
+                &sends,
+            );
+            let _log = root_log.lock().unwrap().new(o!("source" => "native"));
+            joins.push(thread::spawn(move || {
+                cernan::source::NativeServer::new(native_server_send, config, _log)
+                    .run();
             }))
-             });
+        }
+    }
 
     let internal_config = args.internal;
     let mut internal_send = Vec::new();
-    populate_forwards(&mut internal_send,
-                      Some(&mut flush_sends),
-                      &internal_config.forwards,
-                      &cfg_conf!(internal_config),
-                      &sends);
+    populate_forwards(
+        &mut internal_send,
+        Some(&mut flush_sends),
+        &internal_config.forwards,
+        &cfg_conf!(internal_config),
+        root_log.clone(),
+        &sends,
+    );
     joins.push(thread::spawn(move || {
-                                 cernan::source::Internal::new(internal_send,
-                                                               internal_config)
-                                         .run();
-                             }));
+        cernan::source::Internal::new(internal_send, internal_config).run();
+    }));
 
-    mem::replace(&mut args.statsds, None).map(|cfg_map| for (_, config) in cfg_map {
-        let mut statsd_sends = Vec::new();
-        populate_forwards(&mut statsd_sends,
-                          Some(&mut flush_sends),
-                          &config.forwards,
-                          &cfg_conf!(config),
-                          &sends);
-        joins.push(thread::spawn(move || {
-                                     cernan::source::Statsd::new(statsd_sends, config)
-                                         .run();
-                                 }));
-    });
+    if let Some(cfg_map) = mem::replace(&mut args.statsds, None) {
+        for (_, config) in cfg_map {
+            let mut statsd_sends = Vec::new();
+            populate_forwards(
+                &mut statsd_sends,
+                Some(&mut flush_sends),
+                &config.forwards,
+                &cfg_conf!(config),
+                root_log.clone(),
+                &sends,
+            );
+            let _log = root_log.lock().unwrap().new(o!("source" => "statsd"));
+            joins.push(thread::spawn(move || {
+                cernan::source::Statsd::new(statsd_sends, config, _log).run();
+            }));
+        }
+    }
 
-    mem::replace(&mut args.graphites, None).map(|cfg_map| for (_, config) in
-        cfg_map {
-        let mut graphite_sends = Vec::new();
-        populate_forwards(&mut graphite_sends,
-                          Some(&mut flush_sends),
-                          &config.forwards,
-                          &cfg_conf!(config),
-                          &sends);
-        joins.push(thread::spawn(move || {
-            let _log = root_log.new(o!("source" => "graphite"));
-                                     cernan::source::Graphite::new(graphite_sends,
-                                                                   config, _log)
-                                             .run();
-                                 }));
-    });
+    if let Some(cfg_map) = mem::replace(&mut args.graphites, None) {
+        for (_, config) in cfg_map {
+            let mut graphite_sends = Vec::new();
+            populate_forwards(
+                &mut graphite_sends,
+                Some(&mut flush_sends),
+                &config.forwards,
+                &cfg_conf!(config),
+                root_log.clone(),
+                &sends,
+            );
+            let _log = root_log.lock().unwrap().new(o!("source" => "graphite"));
+            joins.push(thread::spawn(move || {
+                cernan::source::Graphite::new(graphite_sends, config, _log).run();
+            }));
+        }
+    }
 
-    mem::replace(&mut args.files, None).map(|cfg| for config in cfg {
-        let mut fp_sends = Vec::new();
-        populate_forwards(&mut fp_sends,
-                          Some(&mut flush_sends),
-                          &config.forwards,
-                          &cfg_conf!(config),
-                          &sends);
-        joins.push(thread::spawn(move || {
-                                     cernan::source::FileServer::new(fp_sends, config)
-                                         .run();
-                                 }));
-    });
+    if let Some(cfg) = mem::replace(&mut args.files, None) {
+        for config in cfg {
+            let mut fp_sends = Vec::new();
+            populate_forwards(
+                &mut fp_sends,
+                Some(&mut flush_sends),
+                &config.forwards,
+                &cfg_conf!(config),
+                root_log.clone(),
+                &sends,
+            );
+            let _log = root_log.lock().unwrap().new(o!("source" => "file_server"));
+            joins.push(thread::spawn(move || {
+                cernan::source::FileServer::new(fp_sends, config, _log).run();
+            }));
+        }
+    }
 
     // BACKGROUND
     //
@@ -278,8 +322,11 @@ fn main() {
                     flush_channels.push(snd.clone());
                 }
                 None => {
-                    error!("Unable to fulfill configured top-level flush to {}",
-                           destination);
+                    error!(
+                        root_log.lock().unwrap(),
+                        "Unable to fulfill configured top-level flush to {}",
+                        destination
+                    );
                     process::exit(0);
                 }
             }
