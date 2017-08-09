@@ -857,6 +857,29 @@ mod test {
     }
 
     #[test]
+    fn test_persist_surive_refresh() {
+        fn inner(cycles: u8, ms: Vec<Telemetry>) -> TestResult {
+            let mut bucket = Buckets::default();
+
+            let mut persist_total = 0;
+            for m in ms {
+                if m.persist {
+                    persist_total += 1;
+                }
+                bucket.add(m);
+            }
+
+            for i in 0..(cycles as usize) {
+                bucket.reset();
+                assert_eq!(persist_total, bucket.count());
+            }
+
+            TestResult::passed()
+        }
+        QuickCheck::new().quickcheck(inner as fn(u8, Vec<Telemetry>) -> TestResult);
+    }
+
+    #[test]
     fn test_reset_clears_space() {
         fn qos_ret(ms: Vec<Telemetry>) -> TestResult {
             let mut bucket = Buckets::default();
