@@ -636,6 +636,10 @@ impl filter::Filter for ProgrammableFilter {
                 }
                 Ok(())
             }
+            metric::Event::Shutdown => {
+                res.push(metric::Event::Shutdown);
+                Ok(())
+            }
         }
     }
 }
