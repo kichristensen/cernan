@@ -119,11 +119,10 @@ fn handle_udp(
     ));
     loop {
         let mut events = mio::Events::with_capacity(1024);
-
         match poll.poll(& mut events, None) {
             Ok(_num_events) =>
                 for event in events {
-
+                    println!("Got event {:?}", event);
                     match event.token() {
                         constants::SYSTEM =>  return,
                         token => {
@@ -168,7 +167,6 @@ impl Source for Statsd {
         match addrs {
             Ok(ips) => {
                 let ips: Vec<_> = ips.collect();
-
                 let mut socket_map : HashMap<mio::Token, mio::net::UdpSocket> = HashMap::new();
                 for i in 0..ips.len() {
                     let token = mio::Token(i);
