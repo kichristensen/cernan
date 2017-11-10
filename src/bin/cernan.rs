@@ -5,7 +5,6 @@ extern crate chan_signal;
 extern crate chrono;
 extern crate fern;
 extern crate hopper;
-extern crate chan_signal;
 extern crate mio;
 
 #[macro_use]
@@ -106,7 +105,7 @@ fn main() {
         _ => log::LogLevelFilter::Trace,
     };
 
-    let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
+    let signal = chan_signal::notify(&[chan_signal::Signal::INT, chan_signal::Signal::TERM]);
 
     fern::Dispatch::new()
         .format(|out, message, record| {
