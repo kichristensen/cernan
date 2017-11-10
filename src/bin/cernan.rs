@@ -75,7 +75,7 @@ fn join_all(workers : HashMap<String, SinkWorker>){
 fn broadcast_shutdown(workers : &HashMap<String, SinkWorker>){
     let mut source_channels = Vec::new();
     for (id, worker) in workers.iter() {
-        println!("Pushing {:?}", id);
+        println!("Signaling shutdown to {:?}", id);
         source_channels.push(worker.sender.clone());
     }
 
@@ -702,7 +702,7 @@ fn main() {
 
     // First, we shut down source to quiesce event generation.
     for (id, source_worker) in sources {
-        println!("Signalling shutdown for {:?}", id);
+        println!("Signaling shutdown to {:?}", id);
         source_worker.readiness.set_readiness(mio::Ready::readable()).expect("Oops!");
         source_worker.thread.join().expect("Failed during join!");
     }
@@ -713,6 +713,4 @@ fn main() {
     broadcast_shutdown(&sinks);
     join_all(sinks);
     join_all(filters);
-
-    println!("DONE");
 }
