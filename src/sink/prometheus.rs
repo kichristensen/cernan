@@ -12,6 +12,7 @@
 
 // use flate2::Compression;
 use flate2::write::GzEncoder;
+use http;
 use metric;
 use metric::{AggregationMethod, TagMap};
 // use protobuf::Message;
@@ -23,16 +24,14 @@ use sink::{Sink, Valve};
 // use std::f64;
 // use std::io;
 use std::io::Write;
+// use std::time;
+use std::option;
 use std::str;
 use std::sync;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
-// use std::time;
-use std::option;
-
 use thread::Stoppable;
-use http;
 
 lazy_static! {
     /// Total reportable metrics
@@ -63,7 +62,7 @@ pub struct Prometheus {
     aggrs: PrometheusAggr,
     // `http_srv` is never used but we must keep it in this struct to avoid the
     // listening server being dropped
-    http_srv: http::Server, 
+    http_srv: http::Server,
 }
 
 /// The configuration for Prometheus sink
@@ -356,7 +355,7 @@ struct PrometheusHandler {
 }
 
 impl http::Handler for PrometheusHandler {
-    fn handle(&self, request:http::Request) -> () {
+    fn handle(&self, request: http::Request) -> () {
         match *self.aggr.lock().unwrap() {
             None => {}
             Some(ref aggr) => {
@@ -369,12 +368,18 @@ impl http::Handler for PrometheusHandler {
                 // infinite number of MIMEs that'll come right on in. We'll
                 // just be monsters and assume if you aren't asking for protobuf you're
                 // asking for plaintext.
-                let default_header = http::Header::from_bytes(&"Accept"[..], &"text/plain"[..]).unwrap();
-                let accepted: Vec<&str>= request.headers()
+                let default_header =
+                    http::Header::from_bytes(&"Accept"[..], &"text/plain"[..])
+                        .unwrap();
+                let accepted: Vec<&str> = request
+                    .headers()
                     .iter()
-                    .find(|x| x.field == http::HeaderField::from_bytes("Accept").unwrap())
+                    .find(|x| {
+                        x.field == http::HeaderField::from_bytes("Accept").unwrap()
+                    })
                     .unwrap_or(&default_header)
-                    .value.as_str()
+                    .value
+                    .as_str()
                     .split(";")
                     .collect();
 
@@ -407,22 +412,26 @@ impl Prometheus {
         let thrd_aggrs = sync::Arc::new(sync::Mutex::new(None));
         let srv_aggrs = sync::Arc::clone(&thrd_aggrs);
 
-        let host_port = format!("{}:{}", config.host.as_str(), config.port.to_string());
+        let host_port =
+            format!("{}:{}", config.host.as_str(), config.port.to_string());
         Prometheus {
             aggrs: aggrs,
             thrd_aggr: thrd_aggrs,
-            http_srv: http::Server::new(host_port, PrometheusHandler{aggr: srv_aggrs}),
+            http_srv: http::Server::new(
+                host_port,
+                PrometheusHandler { aggr: srv_aggrs },
+            ),
         }
     }
 }
 
-//fn write_binary(aggrs: Iter) -> io::Result<()> {
+// fn write_binary(aggrs: Iter) -> io::Result<()> {
 //    res.headers_mut().set_raw(
 //        "content-type",
 //        vec![
 //            b"application/vnd.google.protobuf; \
-//                       proto=io.prometheus.client.MetricFamily; encoding=delimited"
-//                .to_vec(),
+// proto=io.prometheus.client.MetricFamily;
+// encoding=delimited"                .to_vec(),
 //        ],
 //    );
 //    let mut res = tiny_http::Response::new();
@@ -445,9 +454,9 @@ impl Prometheus {
 //                counter.set_value(v);
 //                metric.set_counter(counter);
 //                metric_family.set_field_type(MetricType::COUNTER);
-//                metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
-//                metric_family.write_length_delimited_to_writer(res.by_ref())?
-//            },
+//
+// metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
+// metric_family.write_length_delimited_to_writer(res.by_ref())?            },
 //            AggregationMethod::Set => if let Some(v) = value.set() {
 //                let mut metric_family = MetricFamily::new();
 //                metric_family.set_name(sanitized_name);
@@ -464,9 +473,9 @@ impl Prometheus {
 //                gauge.set_value(v);
 //                metric.set_gauge(gauge);
 //                metric_family.set_field_type(MetricType::GAUGE);
-//                metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
-//                metric_family.write_length_delimited_to_writer(res.by_ref())?
-//            },
+//
+// metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
+// metric_family.write_length_delimited_to_writer(res.by_ref())?            },
 //            AggregationMethod::Summarize => {
 //                let mut metric_family = MetricFamily::new();
 //                metric_family.set_name(sanitized_name);
@@ -482,13 +491,13 @@ impl Prometheus {
 //                let retained_count = value.count();
 //                let retained_sum = value.samples_sum().unwrap_or(0.0);
 //                let mut summary = Summary::new();
-//                summary.set_sample_count((retained_count + value.count()) as u64);
-//                if let Some(val) = value.samples_sum() {
+// summary.set_sample_count((retained_count + value.count()) as
+// u64);                if let Some(val) = value.samples_sum() {
 //                    summary.set_sample_sum(retained_sum + val);
 //                }
 //                let mut quantiles = Vec::with_capacity(9);
-//                for q in &[0.0, 1.0, 0.25, 0.5, 0.75, 0.90, 0.95, 0.99, 0.999] {
-//                    let mut quantile = Quantile::new();
+// for q in &[0.0, 1.0, 0.25, 0.5, 0.75, 0.90, 0.95, 0.99,
+// 0.999] {                    let mut quantile = Quantile::new();
 //                    quantile.set_quantile(*q);
 //                    quantile.set_value(value.query(*q).unwrap());
 //                    quantiles.push(quantile);
@@ -496,9 +505,9 @@ impl Prometheus {
 //                summary.set_quantile(RepeatedField::from_vec(quantiles));
 //                metric.set_summary(summary);
 //                metric_family.set_field_type(MetricType::SUMMARY);
-//                metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
-//                metric_family.write_length_delimited_to_writer(res.by_ref())?
-//            }
+//
+// metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
+// metric_family.write_length_delimited_to_writer(res.by_ref())?            }
 //            AggregationMethod::Histogram => {
 //                let mut metric_family = MetricFamily::new();
 //                metric_family.set_name(sanitized_name);
@@ -534,9 +543,9 @@ impl Prometheus {
 //                histogram.set_bucket(RepeatedField::from_vec(buckets));
 //                metric.set_histogram(histogram);
 //                metric_family.set_field_type(MetricType::HISTOGRAM);
-//                metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
-//                metric_family.write_length_delimited_to_writer(res.by_ref())?
-//            }
+//
+// metric_family.set_metric(RepeatedField::from_vec(vec![metric]));
+// metric_family.write_length_delimited_to_writer(res.by_ref())?            }
 //        }
 //    }
 //    return res.end()
@@ -572,9 +581,9 @@ fn fmt_tags(tags: &TagMap, s: &mut GzEncoder<Vec<u8>>) -> () {
 
 fn write_text(aggrs: Iter) -> option::Option<http::Response> {
     unimplemented!();
-    //let mut seen: HashSet<String> = HashSet::new();
-    //let mut enc = GzEncoder::new(Vec::with_capacity(1024), Compression::Fast);
-    //for value in aggrs {
+    // let mut seen: HashSet<String> = HashSet::new();
+    // let mut enc = GzEncoder::new(Vec::with_capacity(1024), Compression::Fast);
+    // for value in aggrs {
     //    let sanitized_name: String = sanitize(&value.name);
     //    match value.kind() {
     //        AggregationMethod::Sum => if let Some(v) = value.sum() {
@@ -666,9 +675,9 @@ fn write_text(aggrs: Iter) -> option::Option<http::Response> {
     //                    enc.write_all(v.as_bytes())?;
     //                }
     //                enc.write_all(b"\"} ")?;
-    //                enc.write_all(value.query(*q).unwrap().to_string().as_bytes())?;
-    //                enc.write_all(b"\n")?;
-    //            }
+    //
+    // enc.write_all(value.query(*q).unwrap().to_string().as_bytes())?;
+    // enc.write_all(b"\n")?;            }
     //            enc.write_all(sanitized_name.as_bytes())?;
     //            enc.write_all(b"_sum ")?;
     //            enc.write_all(b"{")?;
@@ -687,22 +696,22 @@ fn write_text(aggrs: Iter) -> option::Option<http::Response> {
     //            enc.write_all(b"\n")?;
     //        }
     //    }
-    //}
-    //let encoded = enc.finish()?;
-    //let content_encoding = "gzip";
-    //let content_type = "text/plain; version=0.0.4";
-    //let headers = [
+    // }
+    // let encoded = enc.finish()?;
+    // let content_encoding = "gzip";
+    // let content_type = "text/plain; version=0.0.4";
+    // let headers = [
     //    http::Header::from_bytes(&b"Content-Type"[..], content_type).unwrap(),
     //    http::Header::from_bytes(&b"Content-Encoding"[..], content_type).unwrap(),
-    //];
-    //Some(
+    // ];
+    // Some(
     //    http::Response::new(
     //    200,
     //    headers,
     //    encoded.bytes(),
     //    Some(len(encoded)),
     //    None
-    //))
+    // ))
 }
 
 /// Sanitize cernan Telemetry into prometheus' notion
