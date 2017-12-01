@@ -623,7 +623,7 @@ impl Sink for Wavefront {
         }
     }
 
-    fn shutdown(&mut self) -> () {
+    fn shutdown(mut self) -> () {
         self.flush();
     }
 

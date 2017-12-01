@@ -335,7 +335,7 @@ impl Sink for Elasticsearch {
         }
     }
 
-    fn shutdown(&mut self) -> () {
+    fn shutdown(mut self) -> () {
         self.flush();
     }
 
