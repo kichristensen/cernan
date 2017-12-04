@@ -158,109 +158,109 @@ impl Source for Internal {
                             self.tags,
                             self.chans
                         );
-                       // sink::elasticsearch
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.records.delivery",
-                           sink::elasticsearch::ELASTIC_RECORDS_DELIVERY,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.internal.buffer_len",
-                           sink::elasticsearch::ELASTIC_INTERNAL_BUFFER_LEN,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.records.total_delivered",
-                           sink::elasticsearch::ELASTIC_RECORDS_TOTAL_DELIVERED,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.records.total_failed",
-                           sink::elasticsearch::ELASTIC_RECORDS_TOTAL_FAILED,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.unknown",
-                           sink::elasticsearch::ELASTIC_ERROR_UNKNOWN,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.bulk_action.index",
-                           sink::elasticsearch::ELASTIC_BULK_ACTION_INDEX_ERR,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.bulk_action.create",
-                           sink::elasticsearch::ELASTIC_BULK_ACTION_CREATE_ERR,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.bulk_action.update",
-                           sink::elasticsearch::ELASTIC_BULK_ACTION_UPDATE_ERR,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.bulk_action.delete",
-                           sink::elasticsearch::ELASTIC_BULK_ACTION_DELETE_ERR,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.api.index_not_found",
-                           sink::elasticsearch::ELASTIC_ERROR_API_INDEX_NOT_FOUND,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.api.parsing",
-                           sink::elasticsearch::ELASTIC_ERROR_API_PARSING,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.api.mapper_parsing",
-                           sink::elasticsearch::ELASTIC_ERROR_API_MAPPER_PARSING,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
+                        // sink::elasticsearch
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.records.delivery",
+                            sink::elasticsearch::ELASTIC_RECORDS_DELIVERY,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.internal.buffer_len",
+                            sink::elasticsearch::ELASTIC_INTERNAL_BUFFER_LEN,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.records.total_delivered",
+                            sink::elasticsearch::ELASTIC_RECORDS_TOTAL_DELIVERED,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.records.total_failed",
+                            sink::elasticsearch::ELASTIC_RECORDS_TOTAL_FAILED,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.unknown",
+                            sink::elasticsearch::ELASTIC_ERROR_UNKNOWN,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.bulk_action.index",
+                            sink::elasticsearch::ELASTIC_BULK_ACTION_INDEX_ERR,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.bulk_action.create",
+                            sink::elasticsearch::ELASTIC_BULK_ACTION_CREATE_ERR,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.bulk_action.update",
+                            sink::elasticsearch::ELASTIC_BULK_ACTION_UPDATE_ERR,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.bulk_action.delete",
+                            sink::elasticsearch::ELASTIC_BULK_ACTION_DELETE_ERR,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.api.index_not_found",
+                            sink::elasticsearch::ELASTIC_ERROR_API_INDEX_NOT_FOUND,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.api.parsing",
+                            sink::elasticsearch::ELASTIC_ERROR_API_PARSING,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.api.mapper_parsing",
+                            sink::elasticsearch::ELASTIC_ERROR_API_MAPPER_PARSING,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
                            "cernan.sinks.elasticsearch.error.api.action_request_validation",
                            sink::elasticsearch::ELASTIC_ERROR_API_ACTION_REQUEST_VALIDATION,
                            self.tags,
                            self.chans
                        );
-                       atom_non_zero_telem!(
+                        atom_non_zero_telem!(
                            "cernan.sinks.elasticsearch.error.api.action_document_missing",
                            sink::elasticsearch::ELASTIC_ERROR_API_DOCUMENT_MISSING,
                            self.tags,
                            self.chans
                        );
-                       atom_non_zero_telem!(
+                        atom_non_zero_telem!(
                            "cernan.sinks.elasticsearch.error.api.index_already_exists",
                            sink::elasticsearch::ELASTIC_ERROR_API_INDEX_ALREADY_EXISTS,
                            self.tags,
                            self.chans
                        );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.api.unknown",
-                           sink::elasticsearch::ELASTIC_ERROR_API_UNKNOWN,
-                           self.tags,
-                           self.chans
-                       );
-                       atom_non_zero_telem!(
-                           "cernan.sinks.elasticsearch.error.client",
-                           sink::elasticsearch::ELASTIC_ERROR_CLIENT,
-                           self.tags,
-                           self.chans
-                       );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.api.unknown",
+                            sink::elasticsearch::ELASTIC_ERROR_API_UNKNOWN,
+                            self.tags,
+                            self.chans
+                        );
+                        atom_non_zero_telem!(
+                            "cernan.sinks.elasticsearch.error.client",
+                            sink::elasticsearch::ELASTIC_ERROR_CLIENT,
+                            self.tags,
+                            self.chans
+                        );
                         // sink::wavefront
                         atom_non_zero_telem!(
                             "cernan.sinks.wavefront.aggregation.histogram",
