@@ -18,6 +18,8 @@ const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 use filter::DelayFilterConfig;
 use filter::FlushBoundaryFilterConfig;
 use filter::ProgrammableFilterConfig;
+use filter::DenyLogsFilterConfig;
+use filter::DenyTelemetryFilterConfig;
 use sink::ConsoleConfig;
 use sink::ElasticsearchConfig;
 use sink::FirehoseConfig;
@@ -82,6 +84,10 @@ pub struct Args {
     /// The flush boundaryfilters to use in this cernan run. See
     /// `filters::FlushBoundaryFilter` for more.
     pub flush_boundary_filters: Option<HashMap<String, FlushBoundaryFilterConfig>>,
+    /// The deny log filters to use for this run. 
+    pub deny_logs_filters: Option<HashMap<String, DenyLogsFilterConfig>>,
+    /// The deny telemetry filters to use for this run. 
+    pub deny_telemetry_filters: Option<HashMap<String, DenyTelemetryFilterConfig>>,
     /// See `sinks::Console` for more.
     pub console: Option<ConsoleConfig>,
     /// See `sinks::Null` for more.
@@ -123,6 +129,8 @@ impl Default for Args {
             programmable_filters: None,
             delay_filters: None,
             flush_boundary_filters: None,
+            deny_logs_filters: None,
+            deny_telemetry_filters: None, 
             // sinks
             console: None,
             null: None,
@@ -333,6 +341,52 @@ pub fn parse_config_file(buffer: &str, verbosity: u64) -> Args {
                     }
                     None => continue,
                 }
+            }
+            filters
+        });
+
+        args.deny_logs_filters = filters.get("deny_logs").map(|fltr| {
+            let mut filters: HashMap<String, DenyLogsFilterConfig> =
+                HashMap::new();
+            for (name, tbl) in fltr.as_table().unwrap().iter() {
+                let fwds = match tbl.get("forwards") {
+                    Some(fwds) => fwds.as_array()
+                        .expect("forwards must be an array")
+                        .to_vec()
+                        .iter()
+                        .map(|s| s.as_str().unwrap().to_string())
+                        .collect(),
+                    None => Vec::new(),
+                };
+                let config_path = format!("filters.deny_logs.{}", name);
+                let config = DenyLogsFilterConfig {
+                    forwards: fwds,
+                    config_path: Some(config_path.clone()),
+                };
+                filters.insert(config_path, config);
+            }
+            filters
+        });
+
+        args.deny_telemetry_filters = filters.get("deny_telemetry").map(|fltr| {
+            let mut filters: HashMap<String, DenyTelemetryFilterConfig> =
+                HashMap::new();
+            for (name, tbl) in fltr.as_table().unwrap().iter() {
+                let fwds = match tbl.get("forwards") {
+                    Some(fwds) => fwds.as_array()
+                        .expect("forwards must be an array")
+                        .to_vec()
+                        .iter()
+                        .map(|s| s.as_str().unwrap().to_string())
+                        .collect(),
+                    None => Vec::new(),
+                };
+                let config_path = format!("filters.deny_telemetry.{}", name);
+                let config = DenyTelemetryFilterConfig {
+                    forwards: fwds,
+                    config_path: Some(config_path.clone()),
+                };
+                filters.insert(config_path, config);
             }
             filters
         });

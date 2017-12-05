@@ -13,7 +13,11 @@ use util;
 mod programmable_filter;
 pub mod delay_filter;
 mod flush_boundary_filter;
+mod deny_logs_filter;
+mod deny_telemetry_filter;
 
+pub use self::deny_logs_filter::{DenyLogsFilter, DenyLogsFilterConfig};
+pub use self::deny_telemetry_filter::{DenyTelemetryFilter, DenyTelemetryFilterConfig};
 pub use self::delay_filter::{DelayFilter, DelayFilterConfig};
 pub use self::flush_boundary_filter::{FlushBoundaryFilter, FlushBoundaryFilterConfig};
 pub use self::programmable_filter::{ProgrammableFilter, ProgrammableFilterConfig};

@@ -237,6 +237,30 @@ fn main() {
             config_topology.insert(config_path.clone(), config.forwards.clone());
         }
     }
+    if let Some(ref configs) = args.deny_logs_filters {
+        for (config_path, config) in configs {
+            let (send, recv) = hopper::channel_with_max_bytes(
+                config_path,
+                &args.data_directory,
+                args.max_hopper_queue_bytes,
+            ).unwrap();
+            senders.insert(config_path.clone(), send);
+            receivers.insert(config_path.clone(), recv);
+            config_topology.insert(config_path.clone(), config.forwards.clone());
+        }
+    }
+    if let Some(ref configs) = args.deny_telemetry_filters {
+        for (config_path, config) in configs {
+            let (send, recv) = hopper::channel_with_max_bytes(
+                config_path,
+                &args.data_directory,
+                args.max_hopper_queue_bytes,
+            ).unwrap();
+            senders.insert(config_path.clone(), send);
+            receivers.insert(config_path.clone(), recv);
+            config_topology.insert(config_path.clone(), config.forwards.clone());
+        }
+    }
     // SOURCES
     if let Some(ref configs) = args.native_server_config {
         for (config_path, config) in configs {
