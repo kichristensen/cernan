@@ -18,7 +18,7 @@ use metric;
 use metric::{AggregationMethod, TagMap};
 use quantiles::histogram::Bound;
 use sink::{Sink, Valve};
-// use std::f64;
+use std::f64;
 use std::io;
 use std::io::Write;
 // use std::time;
