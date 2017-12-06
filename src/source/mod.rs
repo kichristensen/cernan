@@ -3,8 +3,6 @@
 //! In cernan a `Source` is a place where all `metric::Event` come from, feeding
 //! down into the source's forwards for further processing. Statsd is a source
 //! that creates `Telemetry`, `FileServer` is a source that creates `LogLine`s.
-extern crate mio;
-
 mod file;
 mod flush;
 mod graphite;
@@ -12,12 +10,15 @@ mod internal;
 mod native;
 mod statsd;
 
+use mio;
+
 pub use self::file::{FileServer, FileServerConfig};
 pub use self::flush::FlushTimer;
 pub use self::graphite::{Graphite, GraphiteConfig};
 pub use self::internal::{report_full_telemetry, Internal, InternalConfig};
 pub use self::native::{NativeServer, NativeServerConfig};
 pub use self::statsd::{Statsd, StatsdConfig, StatsdParseConfig};
+
 
 /// cernan Source, the originator of all `metric::Event`.
 ///

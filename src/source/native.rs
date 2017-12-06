@@ -1,5 +1,3 @@
-extern crate mio;
-
 use super::Source;
 use byteorder::{BigEndian, ReadBytesExt};
 use constants;
@@ -15,6 +13,7 @@ use std::sync;
 use thread;
 use thread::Stoppable;
 use util;
+use mio;
 
 /// The native source
 ///

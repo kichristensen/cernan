@@ -1,9 +1,8 @@
 //! Mio enabled threading library.
 
-extern crate mio;
-
 use constants;
 use std::thread;
+use mio;
 
 /// Event polling structure. Alias of `mio::Poll`.
 pub type Poll = mio::Poll;
